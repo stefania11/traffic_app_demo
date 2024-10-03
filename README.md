@@ -9,22 +9,32 @@ management in the browser.
 
 <img src="/readme/realtime-console-demo.png" width="800" />
 
-# Starting the console
+# Running the Application
 
-This is a React project created using `create-react-app` that is bundled via Webpack.
-Install it by extracting the contents of this package and using;
+To run the application, follow these steps:
 
-```shell
-$ npm i
-```
+1. Clone the repository:
+   ```shell
+   git clone https://github.com/stefania11/traffic_app_demo.git
+   ```
 
-Start your server with:
+2. Navigate to the repository directory:
+   ```shell
+   cd traffic_app_demo
+   ```
 
-```shell
-$ npm start
-```
+3. Install dependencies:
+   ```shell
+   npm install
+   ```
 
-It should be available via `localhost:3000`.
+4. Start the application:
+   ```shell
+   npm start
+   ```
+
+5. Open the application in a web browser at:
+   `http://localhost:3000`
 
 # Table of contents
 
