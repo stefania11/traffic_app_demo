@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Feature</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #trafficFeature {
+            width: 100%;
+            max-width: 600px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #trafficDisplay {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            min-height: 100px;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="trafficFeature">
+        <h1>Traffic Information</h1>
+        <button id="startButton">Start Conversation</button>
+        <button id="stopButton">Stop Conversation</button>
+        <div id="trafficDisplay">Traffic information will appear here...</div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="trafficFeature.bundle.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof TrafficFeature === 'undefined') {
+                console.error('TrafficFeature is not defined. Check if the script is loaded correctly.');
+                return;
+            }
+            const trafficFeature = new TrafficFeature();
+            trafficFeature.init();
+
+            if (typeof MapFeature === 'undefined') {
+                console.error('MapFeature is not defined. Check if the script is loaded correctly.');
+                return;
+            }
+            const mapFeature = new MapFeature('map');
+            mapFeature.init([51.505, -0.09]); // Default center, adjust as needed
+
+            // Update this part to handle map updates based on traffic data
+            trafficFeature.onTrafficUpdate = (trafficData) => {
+                mapFeature.updateTrafficData(trafficData);
+            };
+        });
+    </script>
+</body>
+</html>
