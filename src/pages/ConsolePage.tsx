@@ -30,20 +30,12 @@ import './ConsolePage.scss';
 import { isJsxOpeningLikeElement } from 'typescript';
 
 /**
- * Type for result from get_weather() function call
+ * Type for coordinates
  */
 interface Coordinates {
   lat: number;
   lng: number;
   location?: string;
-  temperature?: {
-    value: number;
-    units: string;
-  };
-  wind_speed?: {
-    value: number;
-    units: string;
-  };
 }
 
 /**
@@ -206,7 +198,7 @@ export function ConsolePage() {
    * - items are all conversation items (dialog)
    * - realtimeEvents are event logs, which can be expanded
    * - memoryKv is for set_memory() function
-   * - coords, marker are for get_weather() function
+   * - coords, marker are for map functionality
    */
   const [items, setItems] = useState<ItemType[]>([]);
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
@@ -544,11 +536,8 @@ export function ConsolePage() {
           value: json.current.temperature_2m as number,
           units: json.current_units.temperature_2m as string,
         };
-        const wind_speed = {
-          value: json.current.wind_speed_10m as number,
-          units: json.current_units.wind_speed_10m as string,
-        };
-        setMarker({ lat, lng, location, temperature, wind_speed });
+        // Remove temperature and wind_speed properties
+        setMarker({ lat, lng, location });
         return json;
       }
     );
@@ -791,19 +780,14 @@ export function ConsolePage() {
         </div>
         <div className="content-right">
           <div className="content-block map">
-            <div className="content-block-title">get_weather()</div>
+            <div className="content-block-title">get_traffic()</div>
             <div className="content-block-title bottom">
               {marker?.location || 'not yet retrieved'}
-              {!!marker?.temperature && (
+              {/* Traffic information will be displayed here */}
+              {marker && (
                 <>
                   <br />
-                  🌡️ {marker.temperature.value} {marker.temperature.units}
-                </>
-              )}
-              {!!marker?.wind_speed && (
-                <>
-                  {' '}
-                  🍃 {marker.wind_speed.value} {marker.wind_speed.units}
+                  🚗 Traffic information for {marker.location}
                 </>
               )}
             </div>
