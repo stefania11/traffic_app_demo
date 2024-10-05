@@ -8,6 +8,8 @@
  * This will also require you to set OPENAI_API_KEY= in a `.env` file
  * You can run it with `npm run relay`, in parallel with `npm start`
  */
+declare const google: any;
+
 const LOCAL_RELAY_SERVER_URL: string =
   process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
 
@@ -28,20 +30,12 @@ import './ConsolePage.scss';
 import { isJsxOpeningLikeElement } from 'typescript';
 
 /**
- * Type for result from get_weather() function call
+ * Type for coordinates
  */
 interface Coordinates {
   lat: number;
   lng: number;
   location?: string;
-  temperature?: {
-    value: number;
-    units: string;
-  };
-  wind_speed?: {
-    value: number;
-    units: string;
-  };
 }
 
 /**
@@ -98,6 +92,102 @@ export function ConsolePage() {
    * - Timing delta for event log displays
    */
   const clientCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  const trafficToolAdded = useRef(false);
+
+  useEffect(() => {
+    // Add the get_traffic tool to the client
+    if (!trafficToolAdded.current) {
+      try {
+        clientRef.current.addTool(
+          {
+            name: 'get_traffic',
+            description: 'Retrieves traffic information for a given lat, lng coordinate pair.',
+            parameters: {
+              type: 'object',
+              properties: {
+                lat: {
+                  type: 'number',
+                  description: 'Latitude',
+                },
+                lng: {
+                  type: 'number',
+                  description: 'Longitude',
+                },
+              },
+              required: ['lat', 'lng'],
+            },
+          },
+          async ({ lat, lng }: { lat: number; lng: number }) => {
+            // Initialize Google Maps
+            const map = new google.maps.Map(document.createElement('div'), {
+              center: { lat, lng },
+              zoom: 13,
+            });
+
+            // Add traffic layer
+            const trafficLayer = new google.maps.TrafficLayer();
+            trafficLayer.setMap(map);
+
+            // Return a message indicating traffic layer is added
+            return { message: 'Traffic layer added to the map' };
+          }
+        );
+        trafficToolAdded.current = true;
+        console.log('Traffic tool added successfully');
+      } catch (error) {
+        console.warn('Error adding traffic tool:', error);
+      }
+    }
+
+    // Add the get_traffic tool to the client
+    if (!trafficToolAdded.current) {
+      try {
+        clientRef.current.addTool(
+          {
+            name: 'get_traffic',
+            description: 'Retrieves traffic information for a given lat, lng coordinate pair.',
+            parameters: {
+              type: 'object',
+              properties: {
+                lat: {
+                  type: 'number',
+                  description: 'Latitude',
+                },
+                lng: {
+                  type: 'number',
+                  description: 'Longitude',
+                },
+              },
+              required: ['lat', 'lng'],
+            },
+          },
+          async ({ lat, lng }: { lat: number; lng: number }) => {
+            // Initialize Google Maps
+            const map = new google.maps.Map(document.createElement('div'), {
+              center: { lat, lng },
+              zoom: 13,
+            });
+
+            // Add traffic layer
+            const trafficLayer = new google.maps.TrafficLayer();
+            trafficLayer.setMap(map);
+
+            // Return a message indicating traffic layer is added
+            return { message: 'Traffic layer added to the map' };
+          }
+        );
+        trafficToolAdded.current = true;
+        console.log('Traffic tool added successfully');
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('already added')) {
+          console.log('Traffic tool already exists');
+        } else {
+          console.warn('Error adding traffic tool:', error);
+        }
+      }
+    }
+  }, []);
   const serverCanvasRef = useRef<HTMLCanvasElement>(null);
   const eventsScrollHeightRef = useRef(0);
   const eventsScrollRef = useRef<HTMLDivElement>(null);
@@ -108,7 +198,7 @@ export function ConsolePage() {
    * - items are all conversation items (dialog)
    * - realtimeEvents are event logs, which can be expanded
    * - memoryKv is for set_memory() function
-   * - coords, marker are for get_weather() function
+   * - coords, marker are for map functionality
    */
   const [items, setItems] = useState<ItemType[]>([]);
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
@@ -446,11 +536,8 @@ export function ConsolePage() {
           value: json.current.temperature_2m as number,
           units: json.current_units.temperature_2m as string,
         };
-        const wind_speed = {
-          value: json.current.wind_speed_10m as number,
-          units: json.current_units.wind_speed_10m as string,
-        };
-        setMarker({ lat, lng, location, temperature, wind_speed });
+        // Remove temperature and wind_speed properties
+        setMarker({ lat, lng, location });
         return json;
       }
     );
@@ -693,19 +780,14 @@ export function ConsolePage() {
         </div>
         <div className="content-right">
           <div className="content-block map">
-            <div className="content-block-title">get_weather()</div>
+            <div className="content-block-title">get_traffic()</div>
             <div className="content-block-title bottom">
               {marker?.location || 'not yet retrieved'}
-              {!!marker?.temperature && (
+              {/* Traffic information will be displayed here */}
+              {marker && (
                 <>
                   <br />
-                  🌡️ {marker.temperature.value} {marker.temperature.units}
-                </>
-              )}
-              {!!marker?.wind_speed && (
-                <>
-                  {' '}
-                  🍃 {marker.wind_speed.value} {marker.wind_speed.units}
+                  🚗 Traffic information for {marker.location}
                 </>
               )}
             </div>
