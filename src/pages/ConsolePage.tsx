@@ -95,7 +95,7 @@ export function ConsolePage() {
     new RealtimeClient(
       LOCAL_RELAY_SERVER_URL
         ? { url: 'ws://localhost:8081' }
-        : { url: process.env.REACT_APP_WEBSOCKET_URL }
+        : { url: process.env.REACT_APP_WEBSOCKET_URL || '' }
     )
   );
 
@@ -149,8 +149,8 @@ export function ConsolePage() {
               const formattedLat = lat.toFixed(6);
               const formattedLng = lng.toFixed(6);
               console.log('Formatted Latitude:', formattedLat, 'Formatted Longitude:', formattedLng);
-              urlObject.searchParams.append('lat', formattedLat);
-              urlObject.searchParams.append('lng', formattedLng);
+              urlObject.searchParams.append('lat', encodeURIComponent(formattedLat));
+              urlObject.searchParams.append('lng', encodeURIComponent(formattedLng));
               const url = urlObject.toString();
               console.log('Fetch URL:', url);
               console.log('URL components:', {
@@ -234,6 +234,36 @@ export function ConsolePage() {
                 type: 'function_call',
                 name: 'get_traffic',
                 arguments: args,
+              },
+            });
+            console.log('Traffic data:', response);
+            if (typeof response === 'object' && 'message' in response) {
+              setTrafficInfo(response as { message: string });
+            } else {
+              console.error('Unexpected response format:', response);
+            }
+          } catch (error) {
+            console.error('Error fetching traffic data:', error);
+          }
+        }
+      }
+    };
+
+    fetchTrafficData();
+  }, [coords, isConnected]);
+
+  useEffect(() => {
+    const fetchTrafficData = async () => {
+      if (coords && isConnected) {
+        const client = clientRef.current;
+        if (client) {
+          try {
+            // Use the existing tool to get traffic data
+            const response = await client.realtime.send('conversation.item.create', {
+              item: {
+                type: 'function_call',
+                name: 'get_traffic',
+                arguments: JSON.stringify({ lat: coords.lat, lng: coords.lng }),
               },
             });
             console.log('Traffic data:', response);
