@@ -16,7 +16,7 @@ const LOCAL_RELAY_SERVER_URL: string =
 import { useEffect, useRef, useCallback, useState } from 'react';
 
 import { RealtimeClient } from '@openai/realtime-api-beta';
-import { ItemType, InputTextContentType, InputAudioContentType } from '@openai/realtime-api-beta/dist/lib/client';
+import { ItemType } from '@openai/realtime-api-beta/dist/lib/client.js';
 import { WavRecorder, WavStreamPlayer } from '../lib/wavtools/index.js';
 import { instructions } from '../utils/conversation_config.js';
 import { WavRenderer } from '../utils/wav_renderer';
@@ -35,6 +35,10 @@ import { isJsxOpeningLikeElement } from 'typescript';
 interface Coordinates {
   lat: number;
   lng: number;
+  trafficInfo?: {
+    message: string;
+    // Add more properties as needed based on the API response
+  };
   location?: string;
 }
 
@@ -47,6 +51,7 @@ interface RealtimeEvent {
   count?: number;
   event: { [key: string]: any };
 }
+
 export function ConsolePage() {
   /**
    * Ask user for API Key
@@ -76,7 +81,7 @@ export function ConsolePage() {
   const clientRef = useRef<RealtimeClient>(
     new RealtimeClient(
       LOCAL_RELAY_SERVER_URL
-        ? { url: LOCAL_RELAY_SERVER_URL }
+        ? { url: 'ws://localhost:8081' }
         : {
             apiKey: apiKey,
             dangerouslyAllowAPIKeyInBrowser: true,
@@ -119,25 +124,46 @@ export function ConsolePage() {
           },
           async ({ lat, lng }: { lat: number; lng: number }) => {
             try {
-              // Use the backend proxy to get traffic data
-              const response = await fetch(`/api/traffic?lat=${lat}&lng=${lng}`);
-              if (!response.ok) {
-                throw new Error('Failed to fetch traffic data from proxy');
-              }
-              const trafficData = await response.json();
+              console.log('Raw Input Latitude:', lat, 'Raw Input Longitude:', lng);
+              console.log('Input types - Latitude:', typeof lat, 'Longitude:', typeof lng);
 
-              // Process and return traffic information
-              const trafficInfo = processTrafficData(trafficData);
-              return { message: 'Traffic information retrieved', data: trafficInfo };
-            } catch (error: unknown) {
-              console.error('Error retrieving traffic data:', error);
-              return { message: 'Unable to retrieve traffic information', error: error instanceof Error ? error.message : String(error) };
+              // Ensure lat and lng are valid numbers
+              if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+                throw new Error('Invalid latitude or longitude');
+              }
+
+              console.log('Validated Latitude:', lat, 'Validated Longitude:', lng);
+
+              const baseUrl = 'http://localhost:3001/api/traffic';
+              const urlObject = new URL(baseUrl);
+              urlObject.searchParams.append('lat', encodeURIComponent(lat.toFixed(6)));
+              urlObject.searchParams.append('lng', encodeURIComponent(lng.toFixed(6)));
+              const url = urlObject.toString();
+              console.log('Fetch URL:', url);
+              console.log('URL components:', {
+                baseUrl,
+                searchParams: urlObject.searchParams.toString()
+              });
+              const response = await fetch(url);
+              if (!response.ok) {
+                throw new Error(`Failed to fetch traffic data: ${response.status} ${response.statusText}`);
+              }
+              console.log('Response status:', response.status);
+              const data = await response.json();
+              console.log('Response data:', JSON.stringify(data, null, 2));
+              return { message: data.message || 'Traffic information retrieved successfully' };
+            } catch (error) {
+              console.error('Error in get_traffic tool:', error);
+              if (error instanceof URIError) {
+                console.error('URIError detected. URL construction or encoding issue.');
+              }
+              return { message: 'An error occurred while retrieving traffic information' };
             }
           }
         );
         trafficToolAdded.current = true;
         console.log('Traffic tool added successfully');
-      } catch (error: unknown) {
+      } catch (error) {
         if (error instanceof Error && error.message.includes('already added')) {
           console.log('Traffic tool already exists');
         } else {
@@ -147,27 +173,10 @@ export function ConsolePage() {
     }
   }, []);
 
-  // Helper function to process traffic data
-  const processTrafficData = (rawData: string) => {
-    // Extract relevant traffic information from rawData
-    const trafficInfo = extractTrafficInfo(rawData);
-    return `Traffic level: ${trafficInfo.level}, Average speed: ${trafficInfo.averageSpeed} km/h`;
-  };
-
-  // Function to extract traffic information from raw data
-  const extractTrafficInfo = (rawData: string) => {
-    // This is a simplified implementation
-    // In a real-world scenario, you would parse the rawData (HTML) to extract actual traffic information
-    const trafficLevels = ['Low', 'Moderate', 'Heavy'];
-    const randomLevel = trafficLevels[Math.floor(Math.random() * trafficLevels.length)];
-    const randomSpeed = Math.floor(Math.random() * 60) + 20; // Random speed between 20 and 80 km/h
-    return { level: randomLevel, averageSpeed: randomSpeed };
-  };
   const serverCanvasRef = useRef<HTMLCanvasElement>(null);
   const eventsScrollHeightRef = useRef(0);
   const eventsScrollRef = useRef<HTMLDivElement>(null);
   const startTimeRef = useRef<string>(new Date().toISOString());
-
   /**
    * All of our variables for displaying application state
    * - items are all conversation items (dialog)
@@ -188,7 +197,39 @@ export function ConsolePage() {
     lat: 37.775593,
     lng: -122.418137,
   });
+
+  useEffect(() => {
+    const fetchTrafficData = async () => {
+      if (coords && isConnected) {
+        const client = clientRef.current;
+        if (client) {
+          try {
+            // Use the existing tool to get traffic data
+            const response = await client.realtime.send('conversation.item.create', {
+              item: {
+                type: 'function_call',
+                name: 'get_traffic',
+                arguments: JSON.stringify({ lat: coords.lat, lng: coords.lng }),
+              },
+            });
+            console.log('Traffic data:', response);
+            if (typeof response === 'object' && 'message' in response) {
+              setTrafficInfo(response as { message: string });
+            } else {
+              console.error('Unexpected response format:', response);
+            }
+          } catch (error) {
+            console.error('Error fetching traffic data:', error);
+          }
+        }
+      }
+    };
+
+    fetchTrafficData();
+  }, [coords, isConnected]);
+
   const [marker, setMarker] = useState<Coordinates | null>(null);
+  const [trafficInfo, setTrafficInfo] = useState<{ message: string } | null>(null);
 
   /**
    * Utility for formatting the timing of logs
@@ -238,35 +279,33 @@ export function ConsolePage() {
     setRealtimeEvents([]);
     setItems(client.conversation.getItems());
 
+    // Connect to microphone
+    await wavRecorder.begin();
+
+    // Connect to audio output
+    await wavStreamPlayer.connect();
+
+    // Connect to realtime API
+    console.log('Attempting to connect to WebSocket...');
     try {
-      // Request microphone permissions
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Connect to microphone
-      await wavRecorder.begin();
-
-      // Connect to audio output
-      await wavStreamPlayer.connect();
-      // Connect to realtime API
       await client.connect();
-      client.sendUserMessageContent([
-        {
-          type: 'input_text' as const,
-          text: 'Hello!',
-          // text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
-        },
-      ] as Array<InputTextContentType>);
-
-      if (client.getTurnDetectionType() === 'server_vad') {
-        await wavRecorder.record((data: { mono: ArrayBuffer }) => {
-          if (client && typeof client.appendInputAudio === 'function') {
-            client.appendInputAudio(data.mono);
-          }
-        });
-      }
+      console.log('Successfully connected to WebSocket');
     } catch (error) {
-      console.error('Error connecting to conversation:', error);
+      console.error('Error connecting to WebSocket:', error);
       setIsConnected(false);
+      return;
+    }
+    console.log('WebSocket connection established, sending initial message');
+    client.sendUserMessageContent([
+      {
+        type: `input_text`,
+        text: `Hello!`,
+        // text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
+      },
+    ]);
+
+    if (client.getTurnDetectionType() === 'server_vad') {
+      await wavRecorder.record((data) => client.appendInputAudio(data.mono));
     }
   }, []);
 
@@ -485,46 +524,6 @@ export function ConsolePage() {
           return newKv;
         });
         return { ok: true };
-      }
-    );
-    client.addTool(
-      {
-        name: 'get_weather',
-        description:
-          'Retrieves the weather for a given lat, lng coordinate pair. Specify a label for the location.',
-        parameters: {
-          type: 'object',
-          properties: {
-            lat: {
-              type: 'number',
-              description: 'Latitude',
-            },
-            lng: {
-              type: 'number',
-              description: 'Longitude',
-            },
-            location: {
-              type: 'string',
-              description: 'Name of the location',
-            },
-          },
-          required: ['lat', 'lng', 'location'],
-        },
-      },
-      async ({ lat, lng, location }: { [key: string]: any }) => {
-        setMarker({ lat, lng, location });
-        setCoords({ lat, lng, location });
-        const result = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m`
-        );
-        const json = await result.json();
-        const temperature = {
-          value: json.current.temperature_2m as number,
-          units: json.current_units.temperature_2m as string,
-        };
-        // Remove temperature and wind_speed properties
-        setMarker({ lat, lng, location });
-        return json;
       }
     );
 
@@ -770,10 +769,10 @@ export function ConsolePage() {
             <div className="content-block-title bottom">
               {marker?.location || 'not yet retrieved'}
               {/* Traffic information will be displayed here */}
-              {marker && (
+              {trafficInfo && (
                 <>
                   <br />
-                  🚗 Traffic information for {marker.location}
+                  🚗 {trafficInfo.message}
                 </>
               )}
             </div>
