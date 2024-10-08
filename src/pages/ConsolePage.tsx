@@ -54,17 +54,30 @@ interface RealtimeEvent {
 
 export function ConsolePage() {
   /**
-   * Ask user for API Key
-   * If we're using the local relay server, we don't need this
+   * We're using the local relay server, so we don't need to ask for an API key
    */
-  const apiKey = LOCAL_RELAY_SERVER_URL
-    ? ''
-    : localStorage.getItem('tmp::voice_api_key') ||
-      prompt('OpenAI API Key') ||
-      '';
-  if (apiKey !== '') {
-    localStorage.setItem('tmp::voice_api_key', apiKey);
-  }
+  const apiKey = '';
+
+  /**
+   * Set up the base URL for API requests
+   */
+  const baseUrl = LOCAL_RELAY_SERVER_URL || 'http://localhost:3001/api';
+
+  /**
+   * Function to fetch traffic data using the local relay server
+   */
+  const fetchTrafficData = async (lat: number, lng: number) => {
+    try {
+      const response = await fetch(`${baseUrl}/traffic?lat=${lat}&lng=${lng}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch traffic data');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching traffic data:', error);
+      return null;
+    }
+  };
 
   /**
    * Instantiate:
@@ -82,9 +95,7 @@ export function ConsolePage() {
     new RealtimeClient(
       LOCAL_RELAY_SERVER_URL
         ? { url: 'ws://localhost:8081' }
-        : {
-            apiKey: process.env.REACT_APP_OPENAI_API_KEY,
-          }
+        : { url: process.env.REACT_APP_WEBSOCKET_URL }
     )
   );
 
@@ -135,27 +146,38 @@ export function ConsolePage() {
 
               const baseUrl = 'http://localhost:3001/api/traffic';
               const urlObject = new URL(baseUrl);
-              urlObject.searchParams.append('lat', lat.toFixed(6));
-              urlObject.searchParams.append('lng', lng.toFixed(6));
+              const formattedLat = lat.toFixed(6);
+              const formattedLng = lng.toFixed(6);
+              console.log('Formatted Latitude:', formattedLat, 'Formatted Longitude:', formattedLng);
+              urlObject.searchParams.append('lat', formattedLat);
+              urlObject.searchParams.append('lng', formattedLng);
               const url = urlObject.toString();
               console.log('Fetch URL:', url);
               console.log('URL components:', {
                 baseUrl,
                 searchParams: urlObject.searchParams.toString()
               });
-              const response = await fetch(url);
-              if (!response.ok) {
-                throw new Error(`Failed to fetch traffic data: ${response.status} ${response.statusText}`);
+              console.log('URL object:', urlObject);
+              console.log('URL string:', url);
+              console.log('Encoded URL:', encodeURI(url));
+              try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                  throw new Error(`Failed to fetch traffic data: ${response.status} ${response.statusText}`);
+                }
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', JSON.stringify(data, null, 2));
+                return { message: data.message || 'Traffic information retrieved successfully' };
+              } catch (error) {
+                console.error('Error in get_traffic tool:', error);
+                if (error instanceof URIError) {
+                  console.error('URIError detected. URL construction or encoding issue.');
+                }
+                return { message: 'An error occurred while retrieving traffic information' };
               }
-              console.log('Response status:', response.status);
-              const data = await response.json();
-              console.log('Response data:', JSON.stringify(data, null, 2));
-              return { message: data.message || 'Traffic information retrieved successfully' };
             } catch (error) {
               console.error('Error in get_traffic tool:', error);
-              if (error instanceof URIError) {
-                console.error('URIError detected. URL construction or encoding issue.');
-              }
               return { message: 'An error occurred while retrieving traffic information' };
             }
           }
@@ -204,11 +226,14 @@ export function ConsolePage() {
         if (client) {
           try {
             // Use the existing tool to get traffic data
+            console.log('Coords:', coords);
+            const args = JSON.stringify({ lat: coords.lat, lng: coords.lng });
+            console.log('Arguments:', args);
             const response = await client.realtime.send('conversation.item.create', {
               item: {
                 type: 'function_call',
                 name: 'get_traffic',
-                arguments: JSON.stringify({ lat: coords.lat, lng: coords.lng }),
+                arguments: args,
               },
             });
             console.log('Traffic data:', response);
@@ -257,12 +282,11 @@ export function ConsolePage() {
   const resetAPIKey = useCallback(() => {
     const apiKey = prompt('OpenAI API Key');
     if (apiKey !== null) {
-      localStorage.clear();
-      localStorage.setItem('tmp::voice_api_key', apiKey);
+      // API key handling should be done securely on the server-side
+      // Reload the page to apply the new API key
       window.location.reload();
     }
   }, []);
-
   /**
    * Connect to conversation:
    * WavRecorder taks speech input, WavStreamPlayer output, client is API client
