@@ -9,7 +9,12 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+// Ensure the API key is not exposed in client-side code
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+if (!GOOGLE_MAPS_API_KEY) {
+  console.error('GOOGLE_MAPS_API_KEY is not set in the environment variables');
+  process.exit(1);
+}
 
 app.get('/api/traffic', async (req, res) => {
   try {
@@ -20,7 +25,15 @@ app.get('/api/traffic', async (req, res) => {
     const url = `https://roads.googleapis.com/v1/nearestRoads?points=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`;
     const response = await axios.get(url);
     if (response.data && response.data.snappedPoints) {
-      res.json(response.data);
+      // Only send necessary data to the client
+      const sanitizedData = {
+        snappedPoints: response.data.snappedPoints.map(point => ({
+          location: point.location,
+          originalIndex: point.originalIndex,
+          placeId: point.placeId
+        }))
+      };
+      res.json(sanitizedData);
     } else {
       res.status(404).send('No road segments found');
     }
@@ -35,5 +48,5 @@ app.get('/api/traffic', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Proxy server running on port ${port}`);
+  console.log(`Traffic data server running on port ${port}`);
 });
