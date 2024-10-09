@@ -10,8 +10,7 @@
  */
 declare const google: any;
 
-const LOCAL_RELAY_SERVER_URL: string =
-  process.env.REACT_APP_LOCAL_RELAY_SERVER_URL || '';
+const LOCAL_RELAY_SERVER_URL: string = process.env.REACT_APP_WEBSOCKET_URL || '';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 
@@ -93,9 +92,9 @@ export function ConsolePage() {
   );
   const clientRef = useRef<RealtimeClient>(
     new RealtimeClient(
-      LOCAL_RELAY_SERVER_URL
-        ? { url: 'ws://localhost:8081' }
-        : { url: process.env.REACT_APP_WEBSOCKET_URL || '' }
+      {
+        url: process.env.REACT_APP_WEBSOCKET_URL || 'ws://localhost:3001'
+      }
     )
   );
 
@@ -218,7 +217,7 @@ export function ConsolePage() {
     lat: 37.775593,
     lng: -122.418137,
   });
-
+  const [marker, setMarker] = useState<Coordinates | null>(null);
   useEffect(() => {
     const fetchTrafficData = async () => {
       if (coords && isConnected) {
@@ -282,7 +281,6 @@ export function ConsolePage() {
     fetchTrafficData();
   }, [coords, isConnected]);
 
-  const [marker, setMarker] = useState<Coordinates | null>(null);
   const [trafficInfo, setTrafficInfo] = useState<{ message: string } | null>(null);
 
   /**
@@ -313,8 +311,16 @@ export function ConsolePage() {
     const apiKey = prompt('OpenAI API Key');
     if (apiKey !== null) {
       // API key handling should be done securely on the server-side
-      // Reload the page to apply the new API key
-      window.location.reload();
+      fetch('/api/set-api-key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ apiKey }),
+      }).then(() => {
+        // Reload the page to apply the new API key
+        window.location.reload();
+      });
     }
   }, []);
   /**
@@ -322,6 +328,7 @@ export function ConsolePage() {
    * WavRecorder taks speech input, WavStreamPlayer output, client is API client
    */
   const connectConversation = useCallback(async () => {
+    console.log('connectConversation function called');
     const client = clientRef.current;
     const wavRecorder = wavRecorderRef.current;
     const wavStreamPlayer = wavStreamPlayerRef.current;
@@ -332,11 +339,27 @@ export function ConsolePage() {
     setRealtimeEvents([]);
     setItems(client.conversation.getItems());
 
+    console.log('Attempting to connect to microphone');
     // Connect to microphone
-    await wavRecorder.begin();
+    try {
+      await wavRecorder.begin();
+      console.log('Successfully connected to microphone');
+    } catch (error) {
+      console.error('Error connecting to microphone:', error);
+      setIsConnected(false);
+      return;
+    }
 
+    console.log('Attempting to connect to audio output');
     // Connect to audio output
-    await wavStreamPlayer.connect();
+    try {
+      await wavStreamPlayer.connect();
+      console.log('Successfully connected to audio output');
+    } catch (error) {
+      console.error('Error connecting to audio output:', error);
+      setIsConnected(false);
+      return;
+    }
 
     // Connect to realtime API
     console.log('Attempting to connect to WebSocket...');
@@ -358,8 +381,10 @@ export function ConsolePage() {
     ]);
 
     if (client.getTurnDetectionType() === 'server_vad') {
+      console.log('Setting up server VAD recording');
       await wavRecorder.record((data) => client.appendInputAudio(data.mono));
     }
+    console.log('connectConversation function completed');
   }, []);
 
   /**
